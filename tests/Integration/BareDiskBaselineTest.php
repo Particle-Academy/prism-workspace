@@ -67,7 +67,14 @@ it('gives Flysystem credit for the traversal it already stops', function (): voi
     $disk = bareDisk($this->diskRoot.DIRECTORY_SEPARATOR.'bare');
 
     foreach (EscapeCorpus::withHazard(Hazard::Traversal) as $attempt) {
-        if (! str_starts_with($attempt->path, '..') || str_contains($attempt->path, ';')) {
+        // Flysystem's rule exactly: fold backslashes, split, look for a segment
+        // that IS `..`. Anything looser fails on Linux — `...` and `....` are
+        // legal directory names there and Flysystem passes them straight
+        // through, which is precisely why this package refuses the shape
+        // instead.
+        $segments = explode('/', str_replace('\\', '/', $attempt->path));
+
+        if (! in_array('..', $segments, true)) {
             continue;
         }
 
