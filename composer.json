@@ -1,0 +1,58 @@
+{
+    "name": "particle-academy/prism-workspace",
+    "description": "Sandboxed, session-scoped agent workspaces for Laravel — a scoped Storage disk behind a path guard, shipped with the adversarial corpus that proves the boundary holds.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["laravel", "ai", "agents", "llm", "prism", "sandbox", "filesystem", "workspace"],
+    "authors": [
+        {
+            "name": "Wish Born",
+            "email": "wish@impact.do"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "ext-mbstring": "*",
+        "laravel/framework": "^12.61.1|^13.12.0",
+        "league/flysystem": "^3.25"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.30",
+        "orchestra/testbench": "^10.0|^11.0",
+        "pestphp/pest": "^3.0|^4.0",
+        "phpstan/phpstan": "^2.0"
+    },
+    "suggest": {
+        "particle-academy/prism-harness": "Durable agent sessions. A harness Session is the intended address for a workspace, but this package does not require one."
+    },
+    "autoload": {
+        "psr-4": {
+            "Prism\\Workspace\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "@php vendor/bin/pest",
+        "types": "@php vendor/bin/phpstan analyse",
+        "format": "@php vendor/bin/pint"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Prism\\Workspace\\PrismWorkspaceServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
+}

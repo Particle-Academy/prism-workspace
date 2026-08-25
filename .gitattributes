@@ -1,0 +1,11 @@
+* text=auto eol=lf
+
+/.github            export-ignore
+/.gitignore         export-ignore
+/phpstan.neon.dist  export-ignore
+/phpunit.xml        export-ignore
+
+# NOTE: /tests is deliberately NOT export-ignored, unlike its siblings.
+# The escape-attempt suite is the evidence for this package's only real
+# claim, and evidence a consumer cannot run is a press release. See
+# README.md, "Run the corpus against your own configuration".

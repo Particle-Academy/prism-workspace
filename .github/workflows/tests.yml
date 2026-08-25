@@ -1,0 +1,68 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - "*.x"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: true
+      matrix:
+        # Windows is not optional here, and it is the one place this matrix
+        # differs from the harness's. This package is a PATH boundary, and
+        # paths are where Windows and POSIX disagree most: drive letters,
+        # backslashes, reserved device names, trailing dots, MAX_PATH,
+        # case-insensitive collisions. A guard proven only on Linux is a
+        # guard proven on the platform where the interesting attacks do not
+        # exist.
+        os: [ubuntu-latest, windows-latest]
+        php: [8.2, 8.3, 8.4]
+        laravel: [12.*, 13.*]
+        stability: [prefer-lowest, prefer-stable]
+        include:
+          - laravel: 12.*
+            testbench: 10.*
+          - laravel: 13.*
+            testbench: 11.*
+        exclude:
+          # Laravel 13 requires PHP 8.3+.
+          - php: 8.2
+            laravel: 13.*
+
+    name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, curl, libxml, mbstring, zip, pdo, sqlite, pdo_sqlite, fileinfo
+          coverage: none
+
+      - name: Setup problem matchers
+        run: |
+          echo "::add-matcher::${{ runner.tool_cache }}/php.json"
+          echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
+
+      - name: Install dependencies
+        run: |
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction
+
+      - name: List installed dependencies
+        run: composer show -D
+
+      - name: Execute tests
+        run: vendor/bin/pest
