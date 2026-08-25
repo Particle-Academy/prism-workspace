@@ -232,9 +232,18 @@ segment.
 
 ## Permissions are Laravel Gates
 
-`prism-harness` settled that tool permissions are Gates and Policies, on the grounds that *may
-this run* is an authorization question and Laravel has an answer to those. There is no
-permission model here, only a call into yours.
+*May this agent do this here* is an authorization question, and Laravel has an answer to those.
+So there is no permission model in this package, only a call into yours.
+
+**This is where that convention was made, not where it was inherited.** `prism-harness` has a
+row in its README's concepts table mapping permissions onto Gates and Policies, and it was
+tempting — including for me — to cite that as settled. It is not: the harness's own status line
+says permissions are "decisions, not code yet", and there is no `Gate`, `Policy` or `authorize`
+anywhere in its `src/`. A plan written next to shipped code still reads like shipped code.
+
+The decision stands on its own merits, which is why it survived losing its provenance. If you
+came here looking for the harness implementation to match, there isn't one to match yet — this
+is the reference.
 
 ```php
 // config/prism-workspace.php
@@ -249,11 +258,28 @@ Gate::define('workspace.write', fn (?User $user, Workspace $workspace, ?string $
 path — nothing is authorised before it is guarded, so a policy is never asked about a path that
 leaves the workspace.
 
-**Off by default.** The sandbox is the boundary; the Gate is your policy on top of it. A
-default-on check denies every operation in a queue worker where there is no authenticated user
-— an agent that silently stops writing files in the context where nobody is watching. The
-harness shipped a default that assumed infrastructure the installing app had not claimed to
-have and reversed it; once is a mistake, twice is a convention.
+### Off by default, and this part is the precedent
+
+The sandbox is the boundary. The Gate is your policy **on top of** the boundary, and it is
+opt-in because the failure modes are not symmetric.
+
+An application that never defines the abilities gets a workspace that works. A default-on check
+denies **every operation in a queue worker**, where there is no authenticated user — an agent
+that silently stops writing files, in the context where nobody is watching. One of those is a
+missing feature; the other is a production incident that looks like the model got lazy.
+
+Guest access is the trap underneath it. Laravel only runs a gate for an unauthenticated user
+when the callback's first parameter is explicitly nullable, so a callback written
+`fn ($user, $workspace, $path)` denies silently rather than running. Any package turning this
+on by default would be shipping that denial to every consumer who wrote the obvious signature.
+
+`prism-harness` did ship a default that assumed infrastructure the installing app had not
+claimed to have — a Redis it had no way to know was there — and had to reverse it. That one is
+real, it is in the commit log, and it is the reason this is off rather than on. Once is a
+mistake; twice would be a convention.
+
+Any sibling package adding an authorization check should start here: **Gates, ability names it
+owns, and off until the application opts in.**
 
 ## Listing streams
 

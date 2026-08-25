@@ -101,9 +101,13 @@ return [
     |--------------------------------------------------------------------------
     |
     | "May this agent do this here?" is an authorization question, and Laravel
-    | has an answer to those. `prism-harness` already decided that tool
-    | permissions are Gates and Policies; this package follows that rather than
+    | has an answer to those — so this package calls into yours rather than
     | inventing a second permission system with its own vocabulary.
+    |
+    | This is where that convention was MADE, not inherited. It was originally
+    | written here as following a `prism-harness` decision; the harness has a
+    | row in a README table saying permissions are Gates, and no Gate anywhere
+    | in its code. See the Authorizer class for the full correction.
     |
     | Turn this on and every operation calls `Gate::authorize()` with
     | `<prefix>.read`, `.write`, `.delete` or `.list`, passing the workspace and

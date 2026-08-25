@@ -238,3 +238,30 @@ it('reads the config key it actually publishes', function (): void {
 
     expect(PrismWorkspace::for('agent-1')->root())->toContain('artifacts');
 });
+
+it('denies rather than runs when a gate callback was not written for a guest', function (): void {
+    config()->set('prism-workspace.authorize', true);
+
+    $ran = false;
+
+    // The obvious signature, and the trap. Laravel only invokes a gate for an
+    // unauthenticated user when the callback's FIRST parameter is explicitly
+    // nullable; this one is not, so for a guest the callback never runs and the
+    // check denies.
+    Gate::define('workspace.write', function ($user, $workspace, $path) use (&$ran): bool {
+        $ran = true;
+
+        return true;
+    });
+
+    expect(fn () => PrismWorkspace::for('agent-1')->write('notes.md', 'x'))
+        ->toThrow(AuthorizationException::class);
+
+    expect($ran)->toBeFalse();
+
+    // Pinned because the README and the Authorizer both cite it as the reason
+    // authorization is off by default, and a claim about framework behaviour
+    // sitting only in prose is how a plan gets mistaken for an implementation.
+    // A queue worker is exactly this context: no authenticated user, an agent
+    // that stops writing files, and nobody watching.
+});
