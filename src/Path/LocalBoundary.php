@@ -119,7 +119,57 @@ final class LocalBoundary
         return null;
     }
 
+    /**
+     * Is `$candidate` the workspace, or inside it?
+     *
+     * The string comparison is the fast path and it is right almost always. It
+     * is not right ALWAYS, and the exception is the reason for the second half
+     * of this method: two `realpath` results can describe the same directory in
+     * different spellings.
+     *
+     * Found on the Windows CI runner, where `sys_get_temp_dir()` is
+     * `C:\Users\RUNNER~1\...` — an 8.3 short name. Resolving a path that goes
+     * through a symlink re-canonicalises the whole thing and can hand back the
+     * long form, while resolving the root directly keeps the short one. Two
+     * spellings, one directory, and a prefix check that says "outside" about a
+     * file that is plainly inside.
+     *
+     * It is the same aliasing the corpus refuses in an incoming path, met in
+     * this package's own bookkeeping — which is a fair warning about how
+     * thoroughly a string comparison can be wrong about a filesystem.
+     *
+     * So when the fast check fails, walk the candidate's ancestors and compare
+     * DIRECTORY realpaths on both sides. Both are then plain directory
+     * resolutions of the same kind, so they agree on spelling. It costs a
+     * handful of stats and only ever runs on the way to a refusal.
+     */
     private function within(string $root, string $candidate): bool
+    {
+        if ($this->sameSpelling($root, $candidate)) {
+            return true;
+        }
+
+        $current = $candidate;
+
+        for ($depth = 0; $depth < 64; $depth++) {
+            $parent = dirname($current);
+
+            if ($parent === $current) {
+                return false;
+            }
+
+            $current = $parent;
+            $resolved = realpath($current);
+
+            if ($resolved !== false && $this->sameSpelling($root, $resolved, exact: true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function sameSpelling(string $root, string $candidate, bool $exact = false): bool
     {
         if (PHP_OS_FAMILY === 'Windows') {
             // NTFS folds case, so a containment check that does not fold case
@@ -128,7 +178,10 @@ final class LocalBoundary
             $candidate = mb_strtolower($candidate, 'UTF-8');
         }
 
-        return $candidate === $root
-            || str_starts_with($candidate, rtrim($root, '/\\').DIRECTORY_SEPARATOR);
+        if ($candidate === $root) {
+            return true;
+        }
+
+        return ! $exact && str_starts_with($candidate, rtrim($root, '/\\').DIRECTORY_SEPARATOR);
     }
 }
