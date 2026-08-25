@@ -81,13 +81,19 @@ is synced, shared or mounted, a Windows worker opens it, and now the file is an 
 Measured, not asserted, and pinned in `tests/Integration/BareDiskBaselineTest.php` so a
 Flysystem release that moves it fails a build rather than leaving this section quietly wrong.
 
-Bare `league/flysystem` local adapter, 134 attempts, Windows 11 / PHP 8.4:
+Bare `league/flysystem` 3.35 local adapter, 134 attempts, Windows 11 / PHP 8.4:
 
 | | |
 |---|---|
-| **46 refused by Flysystem** | 22 traversal, 24 corrupted-path (Unicode category C, invalid UTF-8). Portable and genuinely good. |
+| **46 refused by Flysystem** | 22 traversal, 24 corrupted-path (Unicode category C; invalid UTF-8 only since 3.35). Portable and genuinely good. |
 | **24 refused by the operating system** | Trailing dots, edge spaces, over-long names. Platform-dependent — most are legal on Linux. |
 | **64 accepted** | Device names, alternate data streams, 8.3 aliases, every percent-encoding, separator homoglyphs, `~/.ssh/id_rsa`, and every absolute path. |
+
+Some of that coverage is also **version-dependent**. Invalid UTF-8 — the bytes `C3 28` — is
+accepted by Flysystem 3.25 and refused by 3.35, because `preg_match` with `/u` returns `false`
+rather than `0` on a subject that is not valid UTF-8, so the older check never fired. Which is
+the strongest argument there is for a package checking that class itself, and the reason the
+guard validates encoding *before* it runs a single `/u` pattern.
 
 So this package is **not** what stands between an agent and `../../etc/passwd` on a Laravel
 disk. Flysystem's own normaliser already refuses that, and saying otherwise would be a

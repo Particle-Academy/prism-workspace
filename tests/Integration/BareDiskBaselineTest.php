@@ -25,7 +25,8 @@ use Prism\Workspace\Security\Hazard;
  * 134 attempts:
  *
  *   46  refused by FLYSYSTEM — 22 traversal, 24 corrupted-path (Unicode
- *       category C and invalid UTF-8). Portable, and genuinely good.
+ *       category C, and invalid UTF-8 only since 3.35). Portable, and
+ *       genuinely good.
  *   24  refused by the OPERATING SYSTEM, not by any guard — trailing dots,
  *       edge spaces, over-long names. Platform-dependent by definition: most
  *       of these are legal filenames on Linux.
@@ -88,10 +89,19 @@ it('gives Flysystem credit for the invisible characters it already stops', funct
     $disk = bareDisk($this->diskRoot.DIRECTORY_SEPARATOR.'bare');
 
     // Flysystem matches \p{C} — every Unicode control and format character —
-    // which covers the whole byte-injection group and every invisible in the
-    // deception group. It does NOT cover the separator homoglyphs, because a
-    // fullwidth solidus is punctuation and perfectly well-formed.
-    foreach (['byt-0001', 'byt-0005', 'byt-0010', 'dec-0001', 'dec-0009', 'dec-0011'] as $id) {
+    // which covers the null bytes, the control characters and every invisible
+    // in the deception group. It does NOT cover the separator homoglyphs,
+    // because a fullwidth solidus is punctuation and perfectly well-formed.
+    //
+    // Invalid UTF-8 is deliberately NOT in this list, and finding out why cost
+    // a red prefer-lowest job. The bytes C3 28 are accepted by Flysystem
+    // 3.25 and refused by 3.35: `preg_match` with /u returns FALSE rather than
+    // 0 on a subject that is not valid UTF-8, so the older check silently did
+    // not fire. The framework's coverage of that class is version-dependent,
+    // which is the strongest possible argument for this package checking it
+    // itself — and the reason the guard validates encoding before it runs a
+    // single /u pattern.
+    foreach (['byt-0001', 'byt-0004', 'byt-0005', 'dec-0001', 'dec-0009', 'dec-0011'] as $id) {
         expect(bareDiskAccepts($disk, EscapeCorpus::get($id)->path))->toBeFalse(
             "Flysystem used to refuse [{$id}] and no longer does."
         );
