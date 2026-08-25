@@ -14,7 +14,7 @@ final class PrismWorkspaceServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/workspace.php', 'workspace');
+        $this->mergeConfigFrom(__DIR__.'/../config/prism-workspace.php', 'prism-workspace');
 
         // The manager is a singleton; the workspaces it hands out are cached
         // per address for the request and no longer. A workspace held across
@@ -45,8 +45,8 @@ final class PrismWorkspaceServiceProvider extends ServiceProvider
     {
         if ($this->app->runningInConsole()) {
             $this->publishes([
-                __DIR__.'/../config/workspace.php' => config_path('workspace.php'),
-            ], 'workspace-config');
+                __DIR__.'/../config/prism-workspace.php' => config_path('prism-workspace.php'),
+            ], 'prism-workspace-config');
         }
     }
 }

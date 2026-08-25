@@ -175,7 +175,7 @@ it('leaves authorization alone until the application asks for it', function (): 
 });
 
 it('asks the application Gate once turned on, and does not invent a permission system', function (): void {
-    config()->set('workspace.authorize', true);
+    config()->set('prism-workspace.authorize', true);
 
     // The first parameter is nullable so the gate runs for a guest. A queue
     // worker has no authenticated user, and that is the context an agent
@@ -193,7 +193,7 @@ it('asks the application Gate once turned on, and does not invent a permission s
 });
 
 it('never authorises a path it has not already guarded', function (): void {
-    config()->set('workspace.authorize', true);
+    config()->set('prism-workspace.authorize', true);
 
     $seen = [];
 
@@ -215,4 +215,26 @@ it('never authorises a path it has not already guarded', function (): void {
     $workspace->write('./sub//report.md', 'x');
 
     expect($seen)->toBe(['sub/report.md']);
+});
+
+it('reads the config key it actually publishes', function (): void {
+    // The merge landed under the published key, and nothing was left behind
+    // under the unprefixed one.
+    expect(config('prism-workspace.gate_prefix'))->toBe('workspace')
+        ->and(config('workspace'))->toBeNull();
+
+    // And the manager READS it. Without this line the rename could have been
+    // half-done and every test would still pass: they all set the key they
+    // expect, so a manager reading a different key would fall through to its
+    // own defaults — `local` and `workspaces` — and behave identically.
+    //
+    // That is exactly how prism-harness shipped a config nobody exercised. The
+    // fix there was a test that reads the SHIPPED configuration rather than one
+    // the test wrote; this is that test.
+    config()->set('prism-workspace.root', 'artifacts');
+
+    app()->forgetInstance(WorkspaceManager::class);
+    PrismWorkspace::clearResolvedInstances();
+
+    expect(PrismWorkspace::for('agent-1')->root())->toContain('artifacts');
 });

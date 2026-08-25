@@ -175,16 +175,60 @@ addressed by participant and scope. Four ways in, tried in order:
 
 1. `Prism\Workspace\Contracts\WorkspaceOwner` — the explicit contract.
 2. Any object with a `key(): string` method, which is what a `prism-harness` `Session` already
-   is. No release of the harness and no `require` on it.
+   is.
 3. An Eloquent model — morph class and key, hashed the way the harness hashes a session
    address.
 4. A string, for a job id.
 
+### On the duck typing in step 2
+
+**It is the right answer here, not a shortcut, and the alternatives were weighed and rejected
+rather than overlooked.**
+
+A harness `Session` is the intended address for a workspace, and the obvious move is a shared
+interface. Every way of having one is worse:
+
+| | |
+|---|---|
+| The harness implements a workspace contract | Inverts the dependency. Sessions would wait on releases of the thing that stores their files. |
+| The contract lives in `prism` core | Barred. Core is a provider API shuttle and this does not touch the wire. |
+| A shared contracts package | Rejected by [decision 0008](https://github.com/Particle-Academy/prism-parity/tree/main/docs/decisions): a common parent makes every package in the ecosystem wait on a release of the parent. |
+
+So it is a method name, matched at the call site, and it works today with no release of either
+package and no `require` in either direction. The coupling is real — renaming `Session::key()`
+would silently give every workspace a new address — and it is paid deliberately, which is a
+different thing from not having noticed it. Implement `WorkspaceOwner` when you want the
+coupling to be explicit and checked.
+
+## The on-disk layout is a stable contract
+
+```
+<disk>/<root>/<slug>-<sha256:16>/…
+```
+
+Default: `storage/app/workspaces/agent-1-9f86d081884c7d65/…`
+
+**Treat this as published and stable. Changing it is a breaking change**, and it will be
+handled like one.
+
+That is a promise worth making explicitly, because anything reading these directories from
+outside PHP — a backup job, a retention sweep, an operator with `ls`, a sidecar in another
+language — depends on the layout whether or not it is written down. An undocumented layout that
+consumers depend on anyway is the worst of both: no freedom to change it, and no warning when
+it changes.
+
 The address is slugged **and** hashed. The readable half is for whoever opens the directory;
-the hash is what makes it correct — a session key contains colons, which are illegal in a
-Windows filename; two keys differing only in case are different owners and the same directory
-on Windows and macOS; and slugging is lossy. The result is then run back through the guard,
-because a generated path segment is still a path segment.
+the hash is what makes it correct:
+
+- a harness session key is `session:<hash>:<id>:<scope>`, and a colon is illegal in a Windows
+  filename, so the raw key cannot be a directory name
+- two keys differing only in case are different owners and the *same directory* on Windows and
+  macOS, and the hash is what stops them sharing a workspace
+- slugging is lossy, so two distinct keys can slug identically; the hash is taken over the raw
+  key, before any of that
+
+The result is then run back through the guard, because a generated path segment is still a path
+segment.
 
 ## Permissions are Laravel Gates
 
@@ -193,7 +237,7 @@ this run* is an authorization question and Laravel has an answer to those. There
 permission model here, only a call into yours.
 
 ```php
-// config/workspace.php
+// config/prism-workspace.php
 'authorize' => true,
 ```
 
@@ -227,8 +271,13 @@ Works on install with nothing to configure: the default disk is `local` and work
 `storage/app/workspaces`. Publish the config to change any of it:
 
 ```bash
-php artisan vendor:publish --tag=workspace-config
+php artisan vendor:publish --tag=prism-workspace-config
 ```
+
+The file is `config/prism-workspace.php`, prefixed, because a published config file is a
+filename in *your* config directory and `workspace.php` is a name an application is entirely
+likely to want for itself. The gate prefix is a separate namespace and stays `workspace` — see
+above.
 
 No dependency on `particle-academy/prism` — nothing here touches the wire, so requiring the
 provider shuttle would cost every installer a package that buys them nothing.

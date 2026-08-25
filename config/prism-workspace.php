@@ -2,6 +2,30 @@
 
 declare(strict_types=1);
 
+/*
+|--------------------------------------------------------------------------
+| Why this file is `prism-workspace.php` and not `workspace.php`
+|--------------------------------------------------------------------------
+|
+| Because a published config file is a FILENAME in somebody else's config
+| directory, and `workspace.php` is a name an application is entirely likely
+| to want for itself.
+|
+| `prism-harness` ships `harness.php`, so matching a sibling and matching the
+| ecosystem prefix pointed in opposite directions here. Decision 0010 settles
+| it in favour of the prefix and records the harness's name as the mistake to
+| correct rather than the convention to copy — which is the only reason this
+| note exists: without it, the next agent comparing the two packages fixes the
+| wrong one.
+|
+| Note that the config key and the GATE PREFIX are deliberately different
+| namespaces and are not required to match. The config key has to survive in a
+| directory shared with the whole application. The ability prefix names verbs
+| this package owns, and `workspace.write` is what an application grants — see
+| the authorization block below.
+|
+*/
+
 return [
 
     /*

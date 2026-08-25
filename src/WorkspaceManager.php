@@ -106,6 +106,6 @@ final class WorkspaceManager
 
     private function setting(string $key, mixed $default): mixed
     {
-        return $this->config->get("workspace.{$key}", $default);
+        return $this->config->get("prism-workspace.{$key}", $default);
     }
 }

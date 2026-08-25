@@ -17,19 +17,29 @@ use Prism\Workspace\Path\PathGuard;
  *
  *  1. {@see WorkspaceOwner} — the explicit contract.
  *  2. Any object with a `key(): string` method. This is how a `prism-harness`
- *     Session works TODAY, without the harness shipping a release and without
- *     this package requiring one. Duck typing is a real cost and it is paid
- *     deliberately: the alternative is a `require` on the harness for everyone
- *     who wanted a workspace scoped to something else, or a coordinated release
- *     across two repositories to make the obvious thing work. Whether the two
- *     packages should share a published contract instead is escalated in the
- *     README rather than settled here.
+ *     Session works, and it is the RIGHT answer rather than a shortcut —
+ *     ratified, after the three alternatives were weighed and each was worse.
+ *     The harness implementing a workspace contract inverts the dependency;
+ *     a contract in `prism` core is barred by the boundary, since none of this
+ *     touches the wire; and a shared contracts package is rejected outright by
+ *     decision 0008, because a common parent makes every package in the
+ *     ecosystem wait on a release of the parent.
+ *
+ *     The coupling is real — renaming `Session::key()` would silently give
+ *     every workspace a new address — and it is paid deliberately, which is a
+ *     different thing from not having noticed it.
  *  3. An Eloquent model — morph class and key, hashed the same way the harness
  *     hashes a session address, so the two agree by construction rather than by
  *     coincidence.
  *  4. A string, for a job id or anything else an application already has.
  *
  * ## Why the address is slugged AND hashed
+ *
+ * `<slug>-<sha256:16>`, and it is a PUBLISHED, STABLE layout: anything reading
+ * these directories from outside PHP — a backup job, a retention sweep, an
+ * operator with `ls` — depends on it whether or not it is written down, so
+ * changing it is a breaking change and is handled like one. Documented in the
+ * README for the same reason.
  *
  * The readable part is for whoever opens the directory; the hash is what makes
  * it correct. Three things it fixes at once:

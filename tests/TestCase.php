@@ -46,8 +46,8 @@ abstract class TestCase extends Orchestra
             'throw' => false,
         ]);
 
-        $app['config']->set('workspace.disk', 'local');
-        $app['config']->set('workspace.root', 'workspaces');
+        $app['config']->set('prism-workspace.disk', 'local');
+        $app['config']->set('prism-workspace.root', 'workspaces');
     }
 
     protected function tearDown(): void
