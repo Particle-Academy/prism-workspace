@@ -142,10 +142,10 @@ final class EscapeCorpus implements Countable
                 'Mixed separators. Whichever one a normaliser handles, the other is the one used.'),
             $c('trv-0019', '..\\/secret.txt', Unguarded::Confuses, Unguarded::Escapes,
                 'Mixed separators the other way round.'),
-            $c('trv-0020', '...', Unguarded::Confuses, Unguarded::Reaches,
-                'Three dots. A legal directory name on POSIX; Win32 strips trailing dots from each component, so what the filesystem sees is version-dependent — which is the reason to refuse it rather than to model it.'),
-            $c('trv-0021', '....//secret.txt', Unguarded::Confuses, Unguarded::Reaches,
-                'The classic single-pass-filter bypass: strip one `../` from this and you are left with `../`.'),
+            $c('trv-0020', '...', Unguarded::Confuses, Unguarded::Confuses,
+                'Three dots. MEASURED: a perfectly legal directory name on Linux, and a name Windows refuses outright. Same input, two outcomes — so a workspace written on one platform is not the same workspace on the other, which is reason enough by itself.'),
+            $c('trv-0021', '....//secret.txt', Unguarded::Confuses, Unguarded::Confuses,
+                'The classic single-pass-filter bypass: strip one `../` from this and what is left is `../`.'),
             $c('trv-0022', '..;/secret.txt', Unguarded::Confuses, Unguarded::Confuses,
                 'The `..;` token, which several routers and proxies normalise back to `..` before anything else sees it.'),
             $c('trv-0023', '../secret.txt.bak', Unguarded::Escapes, Unguarded::Escapes,
@@ -244,21 +244,34 @@ final class EscapeCorpus implements Countable
     }
 
     /**
-     * Names that are hardware.
+     * Names whose meaning depends on which Windows you are on.
+     *
+     * MEASURED, and the measurement changed what this group claims. On Windows
+     * 11 with PHP 8.4 and a fully-qualified path, `CON` and `nul.log` are
+     * ORDINARY FILES: written, read back, and listed by `dir`, by PHP and by
+     * cmd alike. The folklore version — the write is swallowed by the device
+     * and the artifact silently disappears — did not reproduce here.
+     *
+     * They are refused anyway, and the real measurement is the better argument.
+     * These names still resolve to hardware in plenty of contexts that still
+     * exist: older Windows, a relative path, a shell, any library that does not
+     * use extended-length prefixes. So the SAME name is a file or a device
+     * depending on who opens it — and a workspace whose artifacts exist or do
+     * not exist depending on the reader's Windows build is not a workspace.
      *
      * @return list<EscapeAttempt>
      */
     private static function reservedDeviceNames(): array
     {
         $c = fn (string $id, string $path, string $note): EscapeAttempt => new EscapeAttempt(
-            $id, $path, Hazard::DeviceName, Refusal::ReservedDeviceName, Unguarded::Confuses, Unguarded::Reaches, $note,
+            $id, $path, Hazard::DeviceName, Refusal::ReservedDeviceName, Unguarded::Confuses, Unguarded::Confuses, $note,
         );
 
         return [
-            $c('dev-0001', 'CON', 'The console. A write succeeds and produces no file; a read blocks on input that never comes.'),
+            $c('dev-0001', 'CON', 'The console.'),
             $c('dev-0002', 'PRN', 'The printer.'),
             $c('dev-0003', 'AUX', 'The auxiliary device.'),
-            $c('dev-0004', 'NUL', 'The bit bucket. A write "succeeds" and the artifact is simply gone — the worst failure mode here, because nothing reports it.'),
+            $c('dev-0004', 'NUL', 'The bit bucket — the worst failure mode of the group wherever it still applies, because the write reports success and the artifact is simply gone.'),
             $c('dev-0005', 'CLOCK$', 'The system clock.'),
             $c('dev-0006', 'COM1', 'A serial port.'),
             $c('dev-0007', 'COM9', 'The last of them, in case a check hardcoded COM1 through COM4.'),
@@ -267,7 +280,7 @@ final class EscapeCorpus implements Countable
             $c('dev-0010', 'CONIN$', 'Console input, which is not in most published lists of reserved names.'),
             $c('dev-0011', 'CONOUT$', 'Console output, likewise.'),
             $c('dev-0012', 'con', 'Lowercase. Device names are case-insensitive, so a case-sensitive list catches nothing.'),
-            $c('dev-0013', 'CON.txt', 'An extension does not help: Win32 matches the name before the first dot.'),
+            $c('dev-0013', 'CON.txt', 'An extension does not help where the rule applies: Win32 matches the name before the first dot.'),
             $c('dev-0014', 'nul.log', 'The most plausible accident in this whole corpus — an agent writing a log to a file it named `nul`.'),
             $c('dev-0015', 'reports/COM1.txt', 'Reserved in every directory, not only the root.'),
             $c('dev-0016', 'AUX.tar.gz', 'Two extensions; still the name before the first dot that counts.'),

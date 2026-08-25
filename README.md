@@ -3,68 +3,256 @@
 A sandboxed place for an agent to keep its work — a scoped Laravel `Storage` disk with an
 agent-shaped API over it, and a path guard that is the actual product.
 
-> **Status: scaffold. No implementation yet.** This first commit exists so the design has
-> somewhere to live before code does, and so the first real commits have something to answer
-> to.
+```php
+use Prism\Workspace\Facades\PrismWorkspace;
 
-The model, the vocabulary and the cross-package decisions this package is built to agree with
-live in [`prism-parity`](https://github.com/Particle-Academy/prism-parity) —
+$workspace = PrismWorkspace::for($session);
+
+$workspace->write('reports/q1.md', $content);
+$workspace->read('reports/q1.md');
+$workspace->list();                       // streamed, not materialised
+```
+
+> **Status: files only. Code execution is deferred, deliberately** — see
+> [Still open](#still-open--raised-not-settled).
+
+The model, the vocabulary and the cross-package decisions this package agrees with live in
+[`prism-parity`](https://github.com/Particle-Academy/prism-parity):
 [`docs/patterns/`](https://github.com/Particle-Academy/prism-parity/tree/main/docs/patterns)
 and
 [`docs/decisions/`](https://github.com/Particle-Academy/prism-parity/tree/main/docs/decisions).
-**This README links there and does not restate them.** Restated documentation drifts exactly
-like restated code, and nothing tests prose.
-
-## What it is for
-
-Agents that do work produce artifacts and need somewhere to put them. A coding assistant
-writes files. A research agent saves a report. That is what this is — bounded, so an agent
-cannot reach outside it.
+**This README links there and does not restate them.**
 
 ## The one thing it has to get right
 
-**A path escaping its workspace is the failure that matters. Everything else here is
-convenience around that.**
+A path escaping its workspace is the failure that matters. Everything else here is
+convenience around that.
 
-Which sets the standard for the package: not "has a filesystem API" but "the boundary holds,
-and you can watch it hold." Two consequences that shape every decision below.
+Which sets a harder standard than "has a sandbox": **the boundary holds, and you can watch it
+hold.**
 
-**The escape corpus is written first and watched failing.** A guard nobody has seen fail is a
-hypothesis, not a guard. Every adversarial case is proven to escape an *unguarded* resolver
-before the guard exists to stop it, and that proof stays in the suite permanently rather than
-being a thing that happened once on someone's laptop.
+### The corpus ships with the package
 
-**The corpus ships in the package.** `/tests` is deliberately not `export-ignore`d, unlike
-every sibling directory. A security boundary a consumer cannot independently verify against
-*their own* disk configuration is a claim; one that ships its own adversarial suite is
-evidence.
+134 adversarial paths across twelve hazard classes, in `Prism\Workspace\Security\EscapeCorpus`
+— not in `/tests`, and `/tests` is not `export-ignore`d either. Point it at a workspace built
+from **your** disk configuration:
 
-## Decisions taken before any code
+```php
+use Prism\Workspace\Security\CorpusRunner;
 
-| Question | Decision |
+$report = (new CorpusRunner)->against(PrismWorkspace::for($session));
+
+if (! $report->passed()) {
+    throw new RuntimeException($report->summary());
+}
+```
+
+It is safe against a live workspace: a passing run writes nothing, because every attempt is
+refused. Two checks run, not one — every attempt is refused with the code the corpus names,
+**and** the directories around the workspace are then swept for the run's marker. The second
+catches the mistake the first cannot: a guard that refuses everything correctly, in front of a
+root that was assembled wrongly.
+
+A security property is only true of the configuration it was measured on. Ours is measured in
+CI. Yours is yours to measure.
+
+### Every case is proven to escape an unguarded workspace first
+
+A guard nobody has watched fail is a hypothesis. Each corpus case records what an *unguarded*
+resolver does with it — per platform — and the suite executes that claim as well as the
+refusal. Without it, a wall of green refusals would only prove the guard agrees with itself.
+
+Both platform models run on **both** platforms, and CI runs on `windows-latest` as well as
+`ubuntu-latest`, because 24 cases are classified differently on the two:
+
+| | Windows | Linux |
+|---|---|---|
+| `..\secret.txt` | escapes | a filename |
+| `C:\Windows\System32\config\SAM` | escapes | a filename |
+| `\\server\share\secret.txt` | escapes | a filename |
+| `/etc/passwd` | escapes | escapes |
+
+The tempting read is that Linux is safe from the Windows spellings. It is the opposite: on
+Linux those are legal filenames, so an unguarded workspace **stores** them — and the directory
+is synced, shared or mounted, a Windows worker opens it, and now the file is an escape.
+
+## What Laravel already does, and what this adds
+
+Measured, not asserted, and pinned in `tests/Integration/BareDiskBaselineTest.php` so a
+Flysystem release that moves it fails a build rather than leaving this section quietly wrong.
+
+Bare `league/flysystem` local adapter, 134 attempts, Windows 11 / PHP 8.4:
+
+| | |
 |---|---|
-| Does it implement a filesystem? | **No.** A workspace is a `scoped` Laravel disk. Laravel already sandboxes; rebuilding it buys a second set of bugs and no capability. |
-| What addresses a workspace? | A **session**. `prism-harness` owns sessions, the same way it owns threads — this package is addressed by identity rather than defining its own. |
-| How are permissions expressed? | **Laravel Gates.** The harness already settled that "may this tool run" is an authorization question; a parallel permission system here would be a second answer to a question with one. |
-| Does it depend on `prism`? | **No.** Nothing here touches the wire, so requiring the provider shuttle would be a dependency that buys the installer nothing. `prism-harness` is a `suggest`, not a `require`. |
-| Does it change `prism` core? | **No.** Core is a provider API shuttle. Anything this package wants from it gets filed and worked around. |
+| **46 refused by Flysystem** | 22 traversal, 24 corrupted-path (Unicode category C, invalid UTF-8). Portable and genuinely good. |
+| **24 refused by the operating system** | Trailing dots, edge spaces, over-long names. Platform-dependent — most are legal on Linux. |
+| **64 accepted** | Device names, alternate data streams, 8.3 aliases, every percent-encoding, separator homoglyphs, `~/.ssh/id_rsa`, and every absolute path. |
+
+So this package is **not** what stands between an agent and `../../etc/passwd` on a Laravel
+disk. Flysystem's own normaliser already refuses that, and saying otherwise would be a
+marketing claim in a security package. What it adds:
+
+- the 64 the framework accepts, refused
+- an absolute path **refused** rather than silently relocated. `put('/etc/passwd')` on a bare
+  disk drops the leading slash and writes `etc/passwd` inside the root: contained, wrong, and
+  no error anywhere. A successful call that did something else is worse than an exception.
+- a **stable code** on every refusal instead of a message. `path_traverses_outside_workspace`
+  is something you can alert on; a substring is something that gets reworded in a patch
+  release.
+- the same answer on both platforms for the same input
+- the symlink boundary, which no path guard can provide
+
+## The boundary, in two halves
+
+`PathGuard` is a pure function from a string to a safer string. **Not one stat, not one
+realpath** — asserted by a test that tokenises the source and fails if a filesystem call
+appears. It runs on every operation, so it does not get to ask the disk a question about a
+string.
+
+`LocalBoundary` handles the escape a string cannot express. `reports/out.txt` is a flawless
+relative path right up until `reports` is a link to `/etc`, so that check costs a syscall —
+one `realpath` for a path that exists, two for a file about to be created, and the walk
+upwards stops at the workspace root. Local disks only; there are no symlinks in S3.
+
+Splitting them is what lets the first half be held to the no-syscall rule at all.
+
+### It refuses shapes, not dangers
+
+`..` is **refused, never resolved.** `docs/../report.md` lands inside the workspace, is
+completely safe, and is refused anyway.
+
+Resolving `..` correctly means being right on every input forever, and the pop-past-the-root
+off-by-one is the most-repeated path bug in the field. Refusing the shape means being right
+once. The same instinct runs through the rest: refuse a colon rather than decide whether this
+one is a drive or a stream; refuse a leading `~` rather than guess which downstream consumer
+expands it; fold backslashes to separators everywhere rather than let one string mean two
+things.
+
+Where that costs something, the cost is a corpus case rather than a surprise:
+
+| Refused | Cost | Case |
+|---|---|---|
+| `docs/../report.md` | Safe, resolves inside | `str-0001` |
+| `draft~1.txt` | A reasonable filename that is exactly the 8.3 alias shape | `str-0003` |
+| `..cache/notes.txt` | A directory that merely starts with two dots | `str-0004` |
+| `a\b.txt` on Linux | A backslash is always a separator, so this becomes `a/b.txt` | — |
+
+### Refusal codes
+
+Codes are the contract; prose is not — [decision
+0004](https://github.com/Particle-Academy/prism-parity/tree/main/docs/decisions). It matters
+more here than for the ports: a refusal from this package is a security event.
+
+```php
+try {
+    $workspace->write($pathFromTheModel, $content);
+} catch (PathRefused $refused) {
+    Log::warning('agent tried to leave its workspace', [
+        'code' => $refused->refusal->value,   // path_traverses_outside_workspace
+        'path' => $refused->path,
+    ]);
+}
+```
+
+`Prism\Workspace\Exceptions\Refusal` is the full taxonomy. `Fault` is a separate code space for
+failures that are not about the path — a missing file is operations, not a security event, and
+an alert that fires on both gets muted.
+
+**Order of checks is contract**, not an implementation detail. `/../secret.txt` is absolute
+*and* traversing and gets exactly one code; the corpus pins which.
+
+## Addressing
+
+A workspace is addressed rather than owned — the same reason the harness's threads are
+addressed by participant and scope. Four ways in, tried in order:
+
+1. `Prism\Workspace\Contracts\WorkspaceOwner` — the explicit contract.
+2. Any object with a `key(): string` method, which is what a `prism-harness` `Session` already
+   is. No release of the harness and no `require` on it.
+3. An Eloquent model — morph class and key, hashed the way the harness hashes a session
+   address.
+4. A string, for a job id.
+
+The address is slugged **and** hashed. The readable half is for whoever opens the directory;
+the hash is what makes it correct — a session key contains colons, which are illegal in a
+Windows filename; two keys differing only in case are different owners and the same directory
+on Windows and macOS; and slugging is lossy. The result is then run back through the guard,
+because a generated path segment is still a path segment.
+
+## Permissions are Laravel Gates
+
+`prism-harness` settled that tool permissions are Gates and Policies, on the grounds that *may
+this run* is an authorization question and Laravel has an answer to those. There is no
+permission model here, only a call into yours.
+
+```php
+// config/workspace.php
+'authorize' => true,
+```
+
+```php
+Gate::define('workspace.write', fn (?User $user, Workspace $workspace, ?string $path) => ...);
+```
+
+`workspace.read`, `.write`, `.delete`, `.list`, each passed the workspace and the **guarded**
+path — nothing is authorised before it is guarded, so a policy is never asked about a path that
+leaves the workspace.
+
+**Off by default.** The sandbox is the boundary; the Gate is your policy on top of it. A
+default-on check denies every operation in a queue worker where there is no authenticated user
+— an agent that silently stops writing files in the context where nobody is watching. The
+harness shipped a default that assumed infrastructure the installing app had not claimed to
+have and reversed it; once is a mistake, twice is a convention.
+
+## Listing streams
+
+`list()` returns a `LazyCollection` over Flysystem's own generator. An agent that has written
+ten thousand files should be able to list them without the listing being what runs the worker
+out of memory, and `->take(5)` should cost five entries rather than ten thousand.
+
+## Installation
+
+```bash
+composer require particle-academy/prism-workspace
+```
+
+Works on install with nothing to configure: the default disk is `local` and workspaces land in
+`storage/app/workspaces`. Publish the config to change any of it:
+
+```bash
+php artisan vendor:publish --tag=workspace-config
+```
+
+No dependency on `particle-academy/prism` — nothing here touches the wire, so requiring the
+provider shuttle would cost every installer a package that buys them nothing.
+`prism-harness` is a `suggest` for the same reason.
 
 ## Still open — raised, not settled
 
-These are escalations, not TODOs. They bind other packages, so they are not this package's to
-answer alone — see
-[decision 0008](https://github.com/Particle-Academy/prism-parity/tree/main/docs/decisions).
+Escalations, not TODOs. They bind other packages, so they are not this package's to answer
+alone — [decision
+0008](https://github.com/Particle-Academy/prism-parity/tree/main/docs/decisions).
 
-- **Is code execution in scope, and if so how is it isolated?** Running model-generated code
-  is a remote-code-execution surface by construction. The current recommendation is *files
-  only, execution deferred*: a scoped filesystem is genuinely useful alone, and a
-  half-isolated sandbox is a more expensive mistake than no sandbox.
-- **What is a skill file?** Prompt fragment, tool definition, or executable are three
-  different packages. Until the phrase means one of them concretely, nothing gets built.
-- **Lifetime.** Does a workspace outlive its session, and who deletes it? Unbounded artifacts
-  accumulating on a customer's disk with no cleanup path is a support ticket with a delay
-  fuse.
+**Is code execution in scope, and if so how is it isolated?** There is no `run()`, and the
+method is *absent* rather than present-and-throwing, because a method that exists is a shape
+the ecosystem has to live with. Running model-generated code is a remote-code-execution
+surface by construction; a half-isolated sandbox is a more expensive mistake than no sandbox.
+A scoped filesystem is genuinely useful on its own, and this package can hold its boundary
+today in a way it could not if it also spawned processes.
+
+**What is a skill file?** Prompt fragment, tool definition, or executable are three different
+packages with three different threat models — the third is code execution wearing a friendlier
+name. Until the phrase means one of them concretely, nothing is built.
+
+**Lifetime.** A workspace outlives its session today and nothing deletes it. `clear()` exists;
+a policy does not. Unbounded artifacts accumulating on a customer's disk with no cleanup path
+is a support ticket with a delay fuse.
 
 ## What it will never do
 
 **No UI.** No file browser. Fancy owns screens; Prism owns capability.
+
+## License
+
+MIT.

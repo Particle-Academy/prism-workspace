@@ -14,7 +14,8 @@
         "php": "^8.2",
         "ext-mbstring": "*",
         "laravel/framework": "^12.61.1|^13.12.0",
-        "league/flysystem": "^3.25"
+        "league/flysystem": "^3.25",
+        "league/flysystem-path-prefixing": "^3.25"
     },
     "require-dev": {
         "laravel/pint": "^1.30",
@@ -44,7 +45,10 @@
         "laravel": {
             "providers": [
                 "Prism\\Workspace\\PrismWorkspaceServiceProvider"
-            ]
+            ],
+            "aliases": {
+                "PrismWorkspace": "Prism\\Workspace\\Facades\\PrismWorkspace"
+            }
         }
     },
     "minimum-stability": "stable",
