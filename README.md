@@ -23,6 +23,11 @@ and
 [`docs/decisions/`](https://github.com/Particle-Academy/prism-parity/tree/main/docs/decisions).
 **This README links there and does not restate them.**
 
+> **Working on this package?** Read **[`AGENTS.md`](AGENTS.md)** first — the boundary
+> this package has to hold, the gates that must be green, and the traps that have
+> already caught someone.
+> `@link AGENTS.md`
+
 ## The one thing it has to get right
 
 A path escaping its workspace is the failure that matters. Everything else here is
