@@ -294,6 +294,12 @@ out of memory, and `->take(5)` should cost five entries rather than ten thousand
 
 ## Installation
 
+> **Not on Packagist yet.** Until it is published, point Composer at the repository:
+>
+> ```json
+> { "repositories": [{ "type": "vcs", "url": "https://github.com/Particle-Academy/prism-workspace" }] }
+> ```
+
 ```bash
 composer require particle-academy/prism-workspace
 ```
