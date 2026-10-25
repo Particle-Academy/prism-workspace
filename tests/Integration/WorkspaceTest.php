@@ -265,3 +265,21 @@ it('denies rather than runs when a gate callback was not written for a guest', f
     // A queue worker is exactly this context: no authenticated user, an agent
     // that stops writing files, and nobody watching.
 });
+
+it('asks the Gate before listing the whole workspace, when list() is called', function (): void {
+    config()->set('prism-workspace.authorize', true);
+
+    $asked = [];
+    Gate::define('workspace.list', function (?Authenticatable $user, $workspace, $path) use (&$asked): bool {
+        $asked[] = $path;
+
+        return false;
+    });
+
+    $workspace = PrismWorkspace::for('agent-1');
+    $workspace->disk()->put('secret.txt', 'x');
+
+    // Refused at the call, not deferred to the first iteration of the result.
+    expect(fn () => $workspace->list())->toThrow(AuthorizationException::class)
+        ->and($asked)->toBe([null]);
+});

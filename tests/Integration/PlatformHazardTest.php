@@ -41,10 +41,21 @@ it('confirms Windows treats a trailing dot and a trailing space as the same name
 
     file_put_contents($directory.DIRECTORY_SEPARATOR.'alias.txt', 'x');
 
-    // ali-0001 and ali-0003: a write to `alias.txt.` overwrites a file the
-    // caller believes it is not touching.
-    expect(file_exists($directory.DIRECTORY_SEPARATOR.'alias.txt.'))->toBeTrue()
-        ->and(file_exists($directory.DIRECTORY_SEPARATOR.'alias.txt '))->toBeTrue()
+    // ali-0001 and ali-0003: a write to `alias.txt.` reaches a file the caller
+    // believes it is not touching. WHICH reader sees the alias is the measured
+    // part, and it changed under us — the same story as `nul.log` above. Win32
+    // path normalisation strips a trailing dot or space, so `cmd` resolves
+    // `alias.txt.` to `alias.txt`. PHP 8.4 on Windows 11 (build 26200, and the
+    // GitHub windows-latest image since 2026-10) stats the name as given and
+    // does NOT see the alias. A name that is one file to one reader and none to
+    // another is still a name to refuse; asserting PHP's view was asserting
+    // folklore, and kept main red from 2026-10-02.
+    $type = static function (string $name) use ($directory): string {
+        return trim((string) shell_exec('cmd /c type "'.$directory.DIRECTORY_SEPARATOR.$name.'" 2>NUL'));
+    };
+
+    expect($type('alias.txt.'))->toBe('x')
+        ->and($type('alias.txt '))->toBe('x')
         ->and(file_exists($directory.DIRECTORY_SEPARATOR.'ALIAS.TXT'))->toBeTrue();
 })->skip(PHP_OS_FAMILY !== 'Windows', 'Windows-only claim.');
 

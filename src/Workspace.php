@@ -243,6 +243,14 @@ final class Workspace
      */
     public function list(string $directory = '', bool $recursive = true): LazyCollection
     {
+        // Listing the whole workspace is still a listing: the root has no path
+        // to guard, but the Gate is asked all the same, as the TypeScript and
+        // Python ports do. Asked here, not inside the lazy collection, so a
+        // refusal happens when list() is called rather than on first iteration.
+        if ($directory === '') {
+            $this->authorizer->check('list', $this);
+        }
+
         $location = $directory === '' ? '' : $this->admit($directory, 'list');
 
         return LazyCollection::make(function () use ($location, $recursive): iterable {
