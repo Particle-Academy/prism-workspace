@@ -240,15 +240,10 @@ segment.
 *May this agent do this here* is an authorization question, and Laravel has an answer to those.
 So there is no permission model in this package, only a call into yours.
 
-**This is where that convention was made, not where it was inherited.** `prism-harness` has a
-row in its README's concepts table mapping permissions onto Gates and Policies, and it was
-tempting — including for me — to cite that as settled. It is not: the harness's own status line
-says permissions are "decisions, not code yet", and there is no `Gate`, `Policy` or `authorize`
-anywhere in its `src/`. A plan written next to shipped code still reads like shipped code.
-
-The decision stands on its own merits, which is why it survived losing its provenance. If you
-came here looking for the harness implementation to match, there isn't one to match yet — this
-is the reference.
+`prism-harness` also implements tool authorization through Laravel Gates; see its
+[tool permissions](https://github.com/Particle-Academy/prism-harness/blob/main/README.md#tool-permissions).
+The `workspace.*` abilities below govern filesystem operations independently of whether a
+harness tool was offered or called.
 
 ```php
 // config/prism-workspace.php
@@ -294,11 +289,7 @@ out of memory, and `->take(5)` should cost five entries rather than ten thousand
 
 ## Installation
 
-> **Not on Packagist yet.** Until it is published, point Composer at the repository:
->
-> ```json
-> { "repositories": [{ "type": "vcs", "url": "https://github.com/Particle-Academy/prism-workspace" }] }
-> ```
+Install the published package from Packagist:
 
 ```bash
 composer require particle-academy/prism-workspace
